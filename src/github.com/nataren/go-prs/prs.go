@@ -21,19 +21,21 @@ func main() {
 
 type PullRequestHandler struct{}
 
+type MindTouchPullRequestType int
+
 const (
-	MT_PR_CLOSED                   = iota
-	MT_PR_TARGETS_MASTER_BRANCH    = iota
-	MT_PR_OPENED_NOT_IN_YOUTRACK   = iota
-	MT_PR_REOPENED_NOT_IN_YOUTRACK = iota
-	MT_PR_MERGED                   = iota
-	MT_PR_UNKNOWN_MERGEABILITY     = iota
-	MT_PR_AUTO_MERGEABLE           = iota
-	MT_PR_UNCATEGORIZED            = iota
+	MT_PR_CLOSED MindTouchPullRequestType = iota
+	MT_PR_TARGETS_MASTER_BRANCH
+	MT_PR_OPENED_NOT_IN_YOUTRACK
+	MT_PR_REOPENED_NOT_IN_YOUTRACK
+	MT_PR_MERGED
+	MT_PR_UNKNOWN_MERGEABILITY
+	MT_PR_AUTO_MERGEABLE
+	MT_PR_UNCATEGORIZED
 )
 
 type MindTouchPullRequest struct {
-	Type int
+	Type MindTouchPullRequestType
 }
 
 func GetMindTouchPullRequestTypeFromEvent(prEvent github.PullRequestEvent) MindTouchPullRequest {
@@ -44,7 +46,36 @@ func GetMindTouchPullRequestTypeFromEvent(prEvent github.PullRequestEvent) MindT
 	}
 }
 
-func GetMindTouchPullRequestType(pr *github.PullRequest) int {
+func IsPullRequestMergeable(pr *github.PullRequest) bool {
+	return pr.Merged != nil && !*pr.Merged && pr.Mergeable != nil && *pr.Mergeable
+	//	&& pr.MergeableState != nil
+	//  && *pr.MergeableState == "clean"
+}
+
+// TODO: Return a tuple (Time, err) instead
+func GetBranchDate(branch *string) time.Time {
+	dateFormat := "yyyyMMdd"
+	return time.Parse(dateFormat, (*branch)[len(*branch)-len(dateFormat)])
+}
+
+func PullRequestTargetsOpenBranch(pr *github.PullRequest) bool {
+	return GetBranchDate(pr.Base.Ref)-time.Now().UTC() >= (time.Hour * 138)
+}
+
+func IsAutoMergeablePullRequest(pr *github.PullRequest) bool {
+	return IsPullRequestMergeable(pr) && PullRequestTargetsOpenBranch(pr)
+}
+
+func GetMindTouchPullRequestType(pr *github.PullRequest) MindTouchPullRequestType {
+	prState := *pr.State
+	switch *pr.State {
+	case "closed":
+		return MT_PR_CLOSED
+	case "open":
+		if IsAutoMergeablePullRequest(pr) {
+			return MT_PR_AUTO_MERGEABLE
+		}
+	}
 	return MT_PR_UNCATEGORIZED
 }
 
