@@ -1,15 +1,17 @@
 package main
 
 import (
+	// "bytes"
+	// "encoding/binary"
 	"log"
 	"net/http"
 	"time"
-//	"encoding/json"
-//	"github.com/google/go-github/github"
+	"encoding/json"
+	"github.com/google/go-github/github"
 )
 
 func main() {
-	s := &http.Server{
+	s := &http.Server {
 		Addr:           ":8080",
 		Handler:        new(PullRequestHandler),
 		ReadTimeout:    10 * time.Second,
@@ -35,11 +37,17 @@ func (h *PullRequestHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		resp := make([]byte, r.ContentLength)
 		bytesRead, err := r.Body.Read(resp)
 		if bytesRead > 0 {
-			w.Write(resp)
-			return
+			var prEvent github.PullRequestEvent
+			jsonDecodingErr := json.Unmarshal(resp, &prEvent)
+			if(jsonDecodingErr != nil) {
+				w.Write([]byte("Could not decode PullRequestEvent"))
+			} else {
+				marshalResp, _ := json.Marshal(*prEvent.Number)
+				w.Write(marshalResp)
+			}
 		} else if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			return
 		}
+		return
 	}
 }
